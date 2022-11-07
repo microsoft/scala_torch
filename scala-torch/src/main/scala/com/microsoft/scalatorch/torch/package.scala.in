@@ -1,0 +1,250 @@
+package com.microsoft.scalatorch
+
+import java.io.File
+
+import com.microsoft.scalatorch.torch.internal.{ TensorIndex, TensorVector, TorchTensor, LongVector, EllipsisIndexType, torch_swig => swig }
+import com.microsoft.scalatorch.torch.jit.{ Module, TensorType }
+import com.microsoft.scalatorch.torch.syntax._
+import com.microsoft.scalatorch.torch.util.NoGrad
+import com.microsoft.scalatorch.torch.InternalEllipsis
+import scala.collection.JavaConverters._
+import scala.collection.compat._
+import scala.reflect.ClassTag
+
+/** Holds most "top level" functions exposed by torchlib.
+  *
+  * @see https://pytorch.org/cppdocs/api/namespace_at.html#functions for most of them
+  */
+package object torch {
+  import com.microsoft.scalatorch.torch.util.Implicits._
+
+  private[torch] val InternalEllipsis = new EllipsisIndexType()
+  private[torch] def wrapTensorTuple2(tensorTuple: (TorchTensor, TorchTensor))(implicit cg: ReferenceManager): (Tensor, Tensor) = {
+    (Tensor(tensorTuple._1), Tensor(tensorTuple._2))
+  }
+
+  private[torch] def wrapTensorTuple3(tensorTuple: (TorchTensor, TorchTensor, TorchTensor))(implicit cg: ReferenceManager): (Tensor, Tensor, Tensor) = {
+    (Tensor(tensorTuple._1), Tensor(tensorTuple._2), Tensor(tensorTuple._3))
+  }
+
+  private[torch] def wrapTensorTuple4(tensorTuple: (TorchTensor, TorchTensor, TorchTensor, TorchTensor))(implicit cg: ReferenceManager): (Tensor, Tensor, Tensor, Tensor) = {
+    (Tensor(tensorTuple._1), Tensor(tensorTuple._2), Tensor(tensorTuple._3), Tensor(tensorTuple._4))
+  }
+
+  private[torch] def wrapTensorTuple5(tensorTuple: (TorchTensor, TorchTensor, TorchTensor, TorchTensor, TorchTensor))(implicit cg: ReferenceManager): (Tensor, Tensor, Tensor, Tensor, Tensor) = {
+    (Tensor(tensorTuple._1), Tensor(tensorTuple._2), Tensor(tensorTuple._3), Tensor(tensorTuple._4), Tensor(tensorTuple._5))
+  }
+
+  private[torch] def wrapTensorTuple4Long(tuple: (TorchTensor, TorchTensor, TorchTensor, TorchTensor, java.lang.Long))(implicit cg: ReferenceManager): (Tensor, Tensor, Tensor, Tensor, Long) = {
+    (Tensor(tuple._1), Tensor(tuple._2), Tensor(tuple._3), Tensor(tuple._4), tuple._5.longValue())
+  }
+
+  private[torch] def wrapTensorTuple2DoubleLong(tuple: (TorchTensor, TorchTensor, java.lang.Double, java.lang.Long))(implicit cg: ReferenceManager): (Tensor, Tensor, Double, Long) = {
+    (Tensor(tuple._1), Tensor(tuple._2), tuple._3.doubleValue(), tuple._4.longValue())
+  }
+
+
+  private[torch] def wrapDoubleLongTuple2(tuple: (java.lang.Double, java.lang.Long))(implicit cg: ReferenceManager): (Double, Long) = {
+    (tuple._1.doubleValue(), tuple._2.longValue())
+  }
+
+  type MemoryFormat = internal.MemoryFormat
+  // TODO add pass-through constants for all
+  object MemoryFormat {
+    val Contiguous = internal.MemoryFormat.Contiguous
+    val Preserve = internal.MemoryFormat.Preserve
+    val ChannelsLast = internal.MemoryFormat.ChannelsLast
+  }
+  type QScheme = internal.QScheme
+  object QScheme {
+    val PER_TENSOR_AFFINE =  internal.QScheme.PER_TENSOR_AFFINE
+    val PER_CHANNEL_AFFINE = internal.QScheme.PER_CHANNEL_AFFINE
+    val PER_TENSOR_SYMMETRIC = internal.QScheme.PER_TENSOR_SYMMETRIC
+    val PER_CHANNEL_SYMMETRIC = internal.QScheme.PER_CHANNEL_SYMMETRIC
+    val PER_CHANNEL_AFFINE_FLOAT_QPARAMS = internal.QScheme.PER_CHANNEL_AFFINE_FLOAT_QPARAMS
+  }
+
+  type Layout = internal.Layout
+  object Layout {
+    val Strided = internal.Layout.Strided
+    val Sparse = internal.Layout.Sparse
+    val Mkldnn = internal.Layout.Mkldnn
+  }
+
+  type Reduction = internal.Reduction
+  object Reduction {
+    val None = internal.Reduction.None
+    val Mean = internal.Reduction.Mean
+    val Sum = internal.Reduction.Sum
+  }
+
+  type device = Device
+
+  type DeviceType = internal.DeviceType
+  object DeviceType {
+    val CPU = internal.DeviceType.CPU
+    val CUDA = internal.DeviceType.CUDA
+    val MKLDNN = internal.DeviceType.MKLDNN
+    val OPENGL = internal.DeviceType.OPENGL
+    val OPENCL = internal.DeviceType.OPENCL
+    val IDEEP = internal.DeviceType.IDEEP
+    val HIP = internal.DeviceType.HIP
+    val FPGA = internal.DeviceType.FPGA
+    val XLA = internal.DeviceType.XLA
+    val Vulkan = internal.DeviceType.Vulkan
+    val Metal = internal.DeviceType.Metal
+    val XPU = internal.DeviceType.XPU
+    val ORT = internal.DeviceType.ORT
+    val MLC = internal.DeviceType.MLC
+    val Meta = internal.DeviceType.Meta
+    val HPU = internal.DeviceType.HPU
+    val VE = internal.DeviceType.VE
+    val Lazy = internal.DeviceType.Lazy
+  }
+
+  type TensorInfo = TensorType
+
+  // From https://pytorch.org/docs/stable/tensor_attributes.html#torch.torch.dtype
+
+  val float32: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.Float))
+  val float: dtype = float32
+
+  val float64: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.Double))
+  val double: dtype = float64
+
+  val complex64: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.ComplexFloat))
+  val cfloat: dtype = complex64
+
+  val complex128: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.ComplexDouble))
+  val cdouble: dtype = complex128
+
+  val float16: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.Half))
+  val half: dtype = float16
+
+  val fbloat16: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.BFloat16))
+
+  val uint8: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.Byte))
+
+  val int8: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.Char))
+
+  val int16: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.Short))
+
+  val int32: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.Int))
+
+  val int64: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.Long))
+  val long: dtype = int64
+
+  val bool: dtype = new dtype(internal.TypeMeta.fromScalarType(internal.ScalarType.Bool))
+
+  // end dtypes
+
+  def device(str: String): Device = Device.fromString(str)
+  def device(`type`: DeviceType, index: Int): Device = Device(`type`, index)
+
+  def manual_seed(seed: Int): Unit = {
+    swig.manual_seed_fixed(seed)
+  }
+  // TODO these should be packages not objects
+  object cuda {
+    def is_available(): Boolean = swig.is_cuda_available()
+    def device_count(): Int = swig.cuda_device_count()
+  }
+  object backend {
+    object cudnn {
+      def is_available(): Boolean = swig.cudnn_is_available()
+    }
+  }
+
+  // manually added for now
+  def normal(mean: Tensor, std: Double, generator: Option[Generator])(implicit cg: ReferenceManager): Tensor = Tensor(swig.normal(mean.underlying, std, generator.map(_.underlying)))
+    def normal(mean: Double, std: Tensor, generator: Option[Generator])(implicit cg: ReferenceManager): Tensor = Tensor(swig.normal(mean, std.underlying, generator.map(_.underlying)))
+    def normal(mean: Tensor, std: Tensor, generator: Option[Generator])(implicit cg: ReferenceManager): Tensor = Tensor(swig.normal(mean.underlying, std.underlying, generator.map(_.underlying)))
+    def normal(mean: Double, std: Double, size: Array[Long], generator: Option[Generator] = None, dtype: Option[dtype] = None, layout: Option[Layout] = None, device: Option[Device] = None, pin_memory: Option[Boolean] = None)(implicit cg: ReferenceManager): Tensor = TensorOptions(
+  dtype=dtype,
+  device=device,
+  layout=layout,
+  pinned_memory=pin_memory,
+  ).toInternal.apply { options =>
+    Tensor(swig.normal(mean, std, size, generator.map(_.underlying), options))
+  }
+
+  def save(value: Array[Tensor], file: String): Unit = swig.save(new TensorVector(value.map(_.underlying)), file)
+  def serialize(value: Array[Tensor]): Array[Byte] = {
+    val vs = new TensorVector(value.map(_.underlying))
+    try {
+      swig.save_TensorVector_to_byte_array(vs)
+    } finally {
+      vs.delete()
+    }
+  }
+  def save(value: Tensor, file: String): Unit = swig.save(value.underlying, file)
+  def serialize(value: Tensor): Array[Byte] = swig.save_Tensor_to_byte_array(value.underlying)
+  def save(value: optim.Optimizer, file: String): Unit = swig.save(value.optimizer, file)
+  def serialize(value: optim.Optimizer): Array[Byte] = swig.save_Optimizer_to_byte_array(value.optimizer)
+  def save(value: Module, file: String): Unit = value.save(new File(file))
+  def serialize(value: Module): Array[Byte] = value.serialize()
+
+  def tensor(data: Any, options: TensorOptions = TensorOptions())(
+      implicit cg: ReferenceManager,
+  ): Tensor = data match {
+    case d: Int    => Tensor.fromIntArray(Array(d), Size(), options)
+    case d: Long   => Tensor.fromLongArray(Array(d), Size(), options)
+    case d: Float  => Tensor.fromFloatArray(Array(d), Size(), options)
+    case d: Byte   => Tensor.fromByteArray(Array(d), Size(), options)
+    case d: Double => Tensor.fromDoubleArray(Array(d), Size(), options)
+    case d: Array[_] =>
+      type I = X forSome { type X }
+      def findInnerType(t: Any): ClassTag[I] = (t match {
+        case Array() =>
+          throw new IllegalArgumentException("Empty array can't be used because the dtype cannot be inferred")
+        case Array(head, tail@_*) => findInnerType(head)
+        case d: Int              => ClassTag.Int
+        case d: Long             => ClassTag.Long
+        case d: Float            => ClassTag.Float
+        case d: Byte             => ClassTag.Byte
+        case d: Double           => ClassTag.Double
+      }).asInstanceOf[ClassTag[I]]
+      val innerClassTag = findInnerType(d)
+      def flatten(a: Array[_]): (Array[I], List[Long]) = {
+        if (a.length == 0) (innerClassTag.newArray(0), Nil)
+        else if (a.head.getClass.isArray) {
+          val elemLength = a.head.asInstanceOf[Array[_]].length
+          require(
+            a.forall(_.asInstanceOf[Array[I]].length == elemLength),
+            s"Expected square array as input, but got ${java.util.Arrays.deepToString(a.asInstanceOf[Array[Object]])}",
+          )
+          val recursed = a.map(x => flatten(x.asInstanceOf[Array[I]]))
+          (
+            recursed.toSeq.flatMap(_._1).toArray(innerClassTag),
+            a.length :: recursed.head._2,
+          )
+        } else (a.asInstanceOf[Array[I]], List(a.length))
+      }
+      val (flattened, dims) = flatten(d)
+      innerClassTag match {
+        case x if x == ClassTag.Int => Tensor.fromIntArray(flattened.asInstanceOf[Array[Int]], Size(dims: _*), options)
+        case x if x == ClassTag.Float =>
+          Tensor.fromFloatArray(flattened.asInstanceOf[Array[Float]], Size(dims: _*), options)
+        case x if x == ClassTag.Byte =>
+          Tensor.fromByteArray(flattened.asInstanceOf[Array[Byte]], Size(dims: _*), options)
+        case x if x == ClassTag.Double =>
+          Tensor.fromDoubleArray(flattened.asInstanceOf[Array[Double]], Size(dims: _*), options)
+        case x if x == ClassTag.Long =>
+          Tensor.fromLongArray(flattened.asInstanceOf[Array[Long]], Size(dims: _*), options)
+      }
+  }
+  // start of auto-generated API
+
+  // @@@ bindgen.py inserts generated bindings here @@@
+
+  // end of auto-generated API
+
+  // TODO we should do the work in swig to produce an Array[Tensor] directly.
+  private[torch] def tensorVectorToArray(tv: TensorVector)(implicit cg: ReferenceManager): Array[Tensor] = {
+    try {
+      tv.asScala.toArray[TorchTensor].map(t => Tensor(t.refCopy()))
+    } finally {
+      tv.delete()
+    }
+  }
+}

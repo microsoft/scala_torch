@@ -1,0 +1,31 @@
+package com.microsoft.scalatorch.torch.nn
+
+import com.microsoft.scalatorch.torch
+import com.microsoft.scalatorch.torch._
+import com.microsoft.scalatorch.torch.util.Implicits._
+import com.microsoft.scalatorch.torch.internal.{ TensorIndex, TensorVector, TorchTensor, LongVector, torch_swig => swig }
+import com.microsoft.scalatorch.torch.util.NoGrad
+
+package object functional {
+  // This overload is only here because the defaults are missing from the auto-generated version.
+  // Shouldn't be needed once a version of libtorch with https://github.com/pytorch/pytorch/pull/70156 is released.
+  def poisson_nll_loss(
+      input: Tensor,
+      target: Tensor,
+      log_input: Boolean = false,
+      full: Boolean = false,
+      eps: Double = 1e-8,
+      reduction: Reduction = Reduction.Mean,
+  )(implicit cg: ReferenceManager): Tensor = {
+    torch.poisson_nll_loss(
+      input,
+      target,
+      log_input,
+      full,
+      eps,
+      reduction = reduction.swigValue(),
+    )
+  }
+
+  // @@@ bindgen.py inserts generated bindings here @@@
+}

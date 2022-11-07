@@ -1,0 +1,11 @@
+package com.microsoft.scalatorch.torch
+
+import com.microsoft.scalatorch.torch
+import com.microsoft.scalatorch.torch._
+import com.microsoft.scalatorch.torch.util.Implicits._
+import com.microsoft.scalatorch.torch.internal.{ TensorIndex, TensorVector, TorchTensor, LongVector, torch_swig => swig }
+import com.microsoft.scalatorch.torch.util.NoGrad
+
+package object special {
+  // @@@ bindgen.py inserts generated bindings here @@@
+}
