@@ -134,6 +134,8 @@ class Tensor private (
     copy
   }
 
+  def defined(): Boolean = underlying.defined()
+
   def save(f: File): Unit = com.microsoft.scalatorch.torch.save(this, f.toString)
   def serialize(): Array[Byte] = com.microsoft.scalatorch.torch.serialize(this)
 
@@ -144,21 +146,29 @@ class Tensor private (
   def layout: Layout = underlyingChecked.layout()
 
   def +(e2: Tensor)(implicit manager: ReferenceManager): Tensor = this.add(e2, 1)
+  def +=(e2: Tensor)(implicit manager: ReferenceManager): this.type = this.add_(e2, 1)
 
   /** Note that this is scalar (pointwise) multiply in Torch.
     * [[*@*]] is matrix multiplication.
     */
   def *(e2: Tensor)(implicit manager: ReferenceManager): Tensor = this.mul(e2)
+  def *=(e2: Tensor)(implicit manager: ReferenceManager): this.type = this.mul_(e2)
   def -(e2: Tensor)(implicit manager: ReferenceManager): Tensor = this.sub(e2, 1)
+  def -=(e2: Tensor)(implicit manager: ReferenceManager): this.type = this.sub_(e2, 1)
   def /(e2: Tensor)(implicit manager: ReferenceManager): Tensor = this.div(e2)
+  def /=(e2: Tensor)(implicit manager: ReferenceManager): this.type = this.div_(e2)
 
   /** Matrix multiplication, alias for [[matmul]] */
   def *@*(e2: Tensor)(implicit manager: ReferenceManager) = this.matmul(e2)
 
   def +(e2: Scalar)(implicit manager: ReferenceManager): Tensor = this.add(e2, 1)
+  def +=(e2: Scalar)(implicit manager: ReferenceManager): this.type = this.add_(e2, 1)
   def *(e2: Scalar)(implicit manager: ReferenceManager): Tensor = this.mul(e2)
+  def *=(e2: Scalar)(implicit manager: ReferenceManager): this.type = this.mul_(e2)
   def -(e2: Scalar)(implicit manager: ReferenceManager): Tensor = this.sub(e2, 1)
+  def -=(e2: Scalar)(implicit manager: ReferenceManager): this.type = this.sub_(e2, 1)
   def /(e2: Scalar)(implicit manager: ReferenceManager): Tensor = this.div(e2)
+  def /=(e2: Scalar)(implicit manager: ReferenceManager): this.type = this.div_(e2)
 
   override def equals(other: Any): Boolean = other match {
     case x: Tensor => underlying.equal(x.underlying)

@@ -135,6 +135,9 @@ rm -f libtorch.zip
 conda env create --name scala-torch --file environment.yml
 conda activate scala-torch
 export TORCH_DIR=$PWD/libtorch
+# This links to the JNI shared library to the absolute paths in the libtorch dir instead of 
+# using an rpath.
+export LINK_TO_BUILD_LIB=true
 sbt test
 ```
 

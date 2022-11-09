@@ -107,17 +107,19 @@ object SGD {
   private def apply(underlying: internal.SGD): SGD = {
     Disposer.add(new SGD(underlying), () => underlying.delete())
   }
-
-  def apply(m: Model, options: SGD.Options = SGD.Options()): SGD = {
+  def apply(parameters: Iterable[Tensor], options: SGD.Options = SGD.Options()): SGD = {
     options.toInternal.apply { opts =>
       val underlying = ReferenceManager.forBlock { implicit rm =>
-        val parameters = Optimizer.extractParameters(m)
         val tensorVector = new TensorVector(parameters.map(_.underlying).asJava)
         try new internal.SGD(tensorVector, opts)
         finally tensorVector.delete()
       }
       apply(underlying)
     }
+  }
+
+  def apply(m: Model, options: SGD.Options): SGD = ReferenceManager.forBlock { implicit rm =>
+    apply(Optimizer.extractParameters(m), options)
   }
 
   def apply(m: Model, learningRate: Double): SGD = apply(m, SGD.Options(learningRate))
@@ -168,16 +170,19 @@ object Adam {
     Disposer.add(new Adam(underlying), () => underlying.delete())
   }
 
-  def apply(m: Model, options: Adam.Options = Adam.Options()): Adam = {
+  def apply(parameters: Iterable[Tensor], options: Adam.Options = Adam.Options()): Adam = {
     options.toInternal.apply { opts =>
       val underlying = ReferenceManager.forBlock { implicit rm =>
-        val parameters = Optimizer.extractParameters(m)
         val tensorVector = new TensorVector(parameters.map(_.underlying).asJava)
         try new internal.Adam(tensorVector, opts)
         finally tensorVector.delete()
       }
       apply(underlying)
     }
+  }
+
+  def apply(m: Model, options: Adam.Options): Adam = ReferenceManager.forBlock { implicit rm =>
+    apply(Optimizer.extractParameters(m), options)
   }
 
   def apply(m: Model, learningRate: Double): Adam = apply(m, Adam.Options(learningRate))
@@ -221,16 +226,19 @@ object Adagrad {
     Disposer.add(new Adagrad(underlying), () => underlying.delete())
   }
 
-  def apply(m: Model, options: Adagrad.Options = Adagrad.Options()): Adagrad = {
+  def apply(parameters: Iterable[Tensor], options: Adagrad.Options = Adagrad.Options()): Adagrad = {
     options.toInternal.apply { opts =>
       val underlying = ReferenceManager.forBlock { implicit rm =>
-        val parameters = Optimizer.extractParameters(m)
         val tensorVector = new TensorVector(parameters.map(_.underlying).asJava)
         try new internal.Adagrad(tensorVector, opts)
         finally tensorVector.delete()
       }
       apply(underlying)
     }
+  }
+
+  def apply(m: Model, options: Adagrad.Options): Adagrad = ReferenceManager.forBlock { implicit rm =>
+    apply(Optimizer.extractParameters(m), options)
   }
 
   def apply(m: Model, learningRate: Double): Adagrad = apply(m, Adagrad.Options(learningRate))
@@ -280,16 +288,19 @@ object RMSProp {
     Disposer.add(new RMSProp(underlying), () => underlying.delete())
   }
 
-  def apply(m: Model, options: RMSProp.Options = RMSProp.Options()): RMSProp = {
+  def apply(parameters: Iterable[Tensor], options: RMSProp.Options = RMSProp.Options()): RMSProp = {
     options.toInternal.apply { opts =>
       val underlying = ReferenceManager.forBlock { implicit rm =>
-        val parameters = Optimizer.extractParameters(m)
         val tensorVector = new TensorVector(parameters.map(_.underlying).asJava)
         try new internal.RMSprop(tensorVector, opts)
         finally tensorVector.delete()
       }
       apply(underlying)
     }
+  }
+
+  def apply(m: Model, options: RMSProp.Options): RMSProp = ReferenceManager.forBlock { implicit rm =>
+    apply(Optimizer.extractParameters(m), options)
   }
 
   def apply(m: Model, learningRate: Double): RMSProp = apply(m, RMSProp.Options(learningRate))

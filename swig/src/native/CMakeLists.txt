@@ -24,6 +24,12 @@ endif()
 set(JAVA_AWT_LIBRARY NotNeeded)
 set(JAVA_JVM_LIBRARY NotNeeded)
 
+# For local development, it's easiest to build a library that remembers absolute paths
+# to the torch libs instead of using an @rpath
+if(DEFINED ENV{LINK_TO_BUILD_LIB})
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+endif()
+
 # Note that we use the value of the environment variable STATIC_PYTORCH if available
 # TODO Currently, STATIC_PYTORCH ON only works for MacOS. Windows compiles but
 #   fails to load at runtime with "DLL initializer failed"
@@ -181,3 +187,4 @@ endif()
 
 message (STATUS "torch libs : ${TORCH_LIBRARIES}")
 install(TARGETS ${LIB_NAME} LIBRARY DESTINATION .)
+

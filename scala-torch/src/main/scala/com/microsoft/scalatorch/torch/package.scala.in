@@ -18,6 +18,19 @@ import scala.reflect.ClassTag
 package object torch {
   import com.microsoft.scalatorch.torch.util.Implicits._
 
+  /** The Scala-Torch analog of
+    * {{{
+    * with torch.no_grad():
+    *    stuff
+    * }}}
+    * is
+    * {{{
+    * torch.no_grad {
+    *   stuff
+    * }
+    */
+  def no_grad[T](body: => T): T = NoGrad.noGrad(body)
+
   private[torch] val InternalEllipsis = new EllipsisIndexType()
   private[torch] def wrapTensorTuple2(tensorTuple: (TorchTensor, TorchTensor))(implicit cg: ReferenceManager): (Tensor, Tensor) = {
     (Tensor(tensorTuple._1), Tensor(tensorTuple._2))

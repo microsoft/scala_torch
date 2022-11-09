@@ -322,9 +322,9 @@ def format_function_scala(scala_name, name, args_decls, args_references, returns
 
   if is_inplace:
     this_reference = "this" if is_tensor_class else "self"
-    scala_decl = f"  def {scala_name}{args_decl}(implicit cg: ReferenceManager): {this_reference}.type = NoGrad.noGrad {{\n    {body}\n    {this_reference}\n  }}"
+    scala_decl = f"  def {scala_name}{args_decl}(implicit rm: ReferenceManager): {this_reference}.type = NoGrad.noGrad {{\n    {body}\n    {this_reference}\n  }}"
   else:
-    scala_decl = f"  def {scala_name}{args_decl}(implicit cg: ReferenceManager): {return_type} = {body}"
+    scala_decl = f"  def {scala_name}{args_decl}(implicit rm: ReferenceManager): {return_type} = {body}"
   return scala_decl
 
 
