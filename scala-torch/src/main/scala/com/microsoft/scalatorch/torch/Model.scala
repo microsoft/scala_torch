@@ -8,7 +8,7 @@ import com.microsoft.scalatorch.torch.internal.{ torch_swig, Layout }
 import com.microsoft.scalatorch.torch.jit.{ ClassType, Module }
 import com.microsoft.scalatorch.torch.util.NoGrad
 import resource.ManagedResource
-import com.microsoft.scalatorch.torch.init.ParameterInit
+import com.microsoft.scalatorch.torch.nn.init.ParameterInit
 import syntax._
 
 /** A wrapper of a Torch Module representing the "root" of the [[Module]] tree.
@@ -55,7 +55,7 @@ class Model private[torch] (
   def addParameters(
       shape: Size,
       name: String,
-      init: ParameterInit = com.microsoft.scalatorch.torch.init.glorotUniform(false),
+      init: ParameterInit = com.microsoft.scalatorch.torch.nn.init.glorotUniform(false),
   ): Tensor = {
     module.addParameter(shape, name, init)(owner)
   }

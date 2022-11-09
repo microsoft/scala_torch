@@ -314,13 +314,13 @@ object Tensor {
   def randomNormal(dim: Size, mean: Float = 0.0f, std: Float = 1.0f, options: TensorOptions = TensorOptions())(
       implicit manager: ReferenceManager,
   ): Tensor = {
-    init.normal_(empty(dim, options), mean, std)
+    nn.init.normal_(empty(dim, options), mean, std)
   }
 
   def randomNormalLike(t: Tensor, mean: Float = 0.0f, std: Float = 1.0f, options: TensorOptions = TensorOptions())(
       implicit manager: ReferenceManager,
   ): Tensor = {
-    init.normal_(empty(t.shape, options), mean, std)
+    nn.init.normal_(empty(t.shape, options), mean, std)
   }
 
   def randomUniform(
@@ -331,7 +331,7 @@ object Tensor {
   )(
       implicit manager: ReferenceManager,
   ): Tensor = {
-    init.uniform_(empty(shape, options), low, high)
+    nn.init.uniform_(empty(shape, options), low, high)
   }
 
   def randomBernoulli(shape: Size, p: Float, options: TensorOptions = TensorOptions())(

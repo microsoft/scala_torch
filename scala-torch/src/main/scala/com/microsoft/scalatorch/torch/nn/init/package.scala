@@ -1,10 +1,7 @@
-package com.microsoft.scalatorch.torch
+package com.microsoft.scalatorch.torch.nn
 
-import com.microsoft.scalatorch.torch.internal
+import com.microsoft.scalatorch.torch.{ Scalar, Tensor, internal }
 import com.microsoft.scalatorch.torch.internal.torch_swig
-import com.microsoft.scalatorch.torch.util.NoGrad
-import com.microsoft.scalatorch.torch.internal
-import com.microsoft.scalatorch.torch.util.NoGrad
 import com.microsoft.scalatorch.torch.util.NoGrad
 
 package object init {
