@@ -1,0 +1,413 @@
+package com.microsoft.scalatorch.torch
+
+import java.io.File
+
+import scala.collection.JavaConverters._
+
+import com.microsoft.scalatorch.torch.internal.{ TensorIndex, Slice, TensorVector, TorchTensor, torch_swig => swig }
+import com.microsoft.scalatorch.torch.jit.TensorType
+import com.microsoft.scalatorch.torch.syntax.{anyToTensor =>_, _}
+import com.microsoft.scalatorch.torch.util.Implicits._
+import com.microsoft.scalatorch.torch.util.NoGrad
+
+/** The central class in Torch. Represents either a parameter, a constant, or an intermediate
+  * expression. Stores both value and gradient.
+  *
+  * @see https://pytorch.org/cppdocs/notes/tensor_basics.html
+  * @see https://pytorch.org/cppdocs/notes/tensor_creation.html for creation
+  * @see https://pytorch.org/docs/stable/tensors.html for the more complete python docs
+  * @see https://github.com/pytorch/pytorch/blob/master/aten/src/ATen/templates/TensorBody.h
+  *      for the C++ header
+  */
+class Tensor private (
+    val underlying: internal.TorchTensor,
+) extends TorchReference[internal.TorchTensor] {
+
+  /** Careful: Java arrays do not have the right equality semantics. You probably want
+    * [[sizes]] instead unless you really know what you're doing.
+    */
+  private def rawSizes: Array[Long] = underlying.sizes()
+
+  def size(): Size = shape
+
+  def shape: Size = Size(rawSizes)
+
+  def device: device = new Device(underlying.device())
+
+  private[torch] def tensorInfo: TensorInfo = {
+    TensorType.create(shape, underlying.dtype(), underlying.device().`type`())
+  }
+
+  def numel(): Long = shape.numel()
+
+  def T(implicit manager: ReferenceManager): Tensor = this.t()
+
+  def requires_grad(): Boolean = underlying.requires_grad()
+
+  private def indexersToInternal(indexers: Array[syntax.Indexer]): Array[internal.TensorIndex] = {
+    indexers.map {
+      case syntax.---            => new TensorIndex(InternalEllipsis)
+      case Indexer.ElemIndexer(i) => new TensorIndex(i)
+      case Indexer.BoolIndexer(b) => new TensorIndex(b)
+      case Indexer.RangeStepIndexer(bottom, top, step) =>
+        val slice = new internal.Slice(bottom, top, step)
+        try new TensorIndex(slice)
+        finally slice.delete()
+    }
+  }
+
+  /** Allows for indexing and slicing syntax similar to what's available in Python. The syntax here
+    * attempts to match Python as much as possible within the limits of Scala syntax.
+    * | Scala         | Python      |  Notes |
+    * | :---:         | :---:       | ---    |
+    * | `x(1)`        | `x[1]`      |        |
+    * | `x(1,2)`      | `x[1,2]`    |        |
+    * | `x(1->2)`     | `x[1:2]`    |        |
+    * | `x(1->2->3)`  | `x[1:2:3]`  |        |
+    * | `x(::)`       | `x[::]`     |        |
+    * | `x(1::2)`     | `x[1::2]`   |        |
+    * | `x(1.::)`     | `x[1::]`    |        |
+    * | `x(1::)`      | `x[1::]`    | might need to `import scala.language.postfixOps` depending on Scala version     |
+    * | `x(None)`     | `x[None]`   |        |
+    * | `x(0::)`      | `x[::]`     | No special syntax in Scala for omitting 0 |
+    * | `x(0->3)`     | `x[:3]`     | No special syntax in Scala for omitting 0 |
+    * | `x(0->3->5)`  | `x[:3:5]`   | No special syntax in Scala for omitting 0 |
+    * | `x(1,---)`    | `x[1,...]`  |        |
+    * | `x(---,1)`    | `x[...,1]`  |        |
+    */
+  def apply(indexers: syntax.Indexer*)(implicit manager: ReferenceManager): Tensor = {
+    val indexerArray = indexersToInternal(indexers.toArray)
+    try Tensor(this.underlying.index(indexerArray))
+    finally indexerArray.foreach(_.delete())
+  }
+
+  /** Allows for assignment syntax like {{{x(1, 2 -> 3, ::) = someTensor}}}.
+    * Unfortunately, Scala doesn't allow for variadic args on update, so we have to do so manually overloading
+    * up to a fixed arity. If you need an arity > 5, you can use {{{x(Array(1, 2 -> 3, ....) = someTensor}}}
+    * See comment on [[apply]] detailing Tensor slicing/indexing syntax.
+    */
+  def update(indexer1: syntax.Indexer, rhs: Tensor)(implicit manager: ReferenceManager): this.type = update(Array(indexer1), rhs)
+  def update(indexer1: syntax.Indexer, indexer2: syntax.Indexer, rhs: Tensor)(implicit manager: ReferenceManager): this.type = update(Array(indexer1, indexer2), rhs)
+  def update(indexer1: syntax.Indexer, indexer2: syntax.Indexer, indexer3: syntax.Indexer, rhs: Tensor)(implicit manager: ReferenceManager): this.type = update(Array(indexer1, indexer3, indexer3), rhs)
+  def update(indexer1: syntax.Indexer, indexer2: syntax.Indexer, indexer3: syntax.Indexer, indexer4: syntax.Indexer, rhs: Tensor)(implicit manager: ReferenceManager): this.type = update(Array(indexer1, indexer3, indexer3, indexer4), rhs)
+  def update(indexer1: syntax.Indexer, indexer2: syntax.Indexer, indexer3: syntax.Indexer, indexer4: syntax.Indexer, indexer5: syntax.Indexer, rhs: Tensor)(implicit manager: ReferenceManager): this.type = update(Array(indexer1, indexer3, indexer3, indexer4, indexer5), rhs)
+
+  def update(indexers: Array[syntax.Indexer], rhs: Tensor)(implicit manager: ReferenceManager): this.type = {
+    val indexerArray = indexersToInternal(indexers)
+    try {
+      this.underlying.index_put_(indexerArray, rhs.underlying)
+      this
+    } finally {
+      indexerArray.foreach(_.delete())
+    }
+  }
+
+  // Start of main api
+
+  def backward(): Unit = assertOpen(underlying.backward())
+
+  def toFloat: Float = assertOpen {
+    require(numel() == 1)
+    underlying.toFloat
+  }
+
+  def real(implicit manager: ReferenceManager): Tensor = com.microsoft.scalatorch.torch.real(this)
+  def imag(implicit manager: ReferenceManager): Tensor = com.microsoft.scalatorch.torch.imag(this)
+
+  def toArray[T](implicit manifest: Manifest[T] = Manifest.Float): Array[T] = {
+    manifest match {
+      case Manifest.Float  => swig.to_float_array(underlyingChecked)
+      case Manifest.Long   => swig.to_long_array(underlyingChecked)
+      case Manifest.Double => swig.to_double_array(underlyingChecked)
+      case Manifest.Int    => swig.to_int_array(underlyingChecked)
+      case Manifest.Byte   => swig.to_byte_array(underlyingChecked)
+    }
+  }.asInstanceOf[Array[T]]
+
+  def grad(implicit manager: ReferenceManager): Tensor = Tensor(underlying.grad())
+
+  def unary_-(implicit manager: ReferenceManager): Tensor = unOp(swig.neg)
+
+  def copy()(implicit manager: ReferenceManager): Tensor = {
+    val copy = Tensor.empty(shape, TensorOptions(requires_grad = Some(this.requires_grad())))
+    copy.copy_(this)
+    copy
+  }
+
+  def defined(): Boolean = underlying.defined()
+
+  def save(f: File): Unit = com.microsoft.scalatorch.torch.save(this, f.toString)
+  def serialize(): Array[Byte] = com.microsoft.scalatorch.torch.serialize(this)
+
+  // @@@ bindgen.py inserts generated bindings here @@@
+
+
+  def dtype: dtype = new dtype(underlyingChecked.dtype())
+  def layout: Layout = underlyingChecked.layout()
+
+  def +(e2: Tensor)(implicit manager: ReferenceManager): Tensor = this.add(e2, 1)
+  def +=(e2: Tensor)(implicit manager: ReferenceManager): this.type = this.add_(e2, 1)
+
+  /** Note that this is scalar (pointwise) multiply in Torch.
+    * [[*@*]] is matrix multiplication.
+    */
+  def *(e2: Tensor)(implicit manager: ReferenceManager): Tensor = this.mul(e2)
+  def *=(e2: Tensor)(implicit manager: ReferenceManager): this.type = this.mul_(e2)
+  def -(e2: Tensor)(implicit manager: ReferenceManager): Tensor = this.sub(e2, 1)
+  def -=(e2: Tensor)(implicit manager: ReferenceManager): this.type = this.sub_(e2, 1)
+  def /(e2: Tensor)(implicit manager: ReferenceManager): Tensor = this.div(e2)
+  def /=(e2: Tensor)(implicit manager: ReferenceManager): this.type = this.div_(e2)
+
+  /** Matrix multiplication, alias for [[matmul]] */
+  def *@*(e2: Tensor)(implicit manager: ReferenceManager) = this.matmul(e2)
+
+  def +(e2: Scalar)(implicit manager: ReferenceManager): Tensor = this.add(e2, 1)
+  def +=(e2: Scalar)(implicit manager: ReferenceManager): this.type = this.add_(e2, 1)
+  def *(e2: Scalar)(implicit manager: ReferenceManager): Tensor = this.mul(e2)
+  def *=(e2: Scalar)(implicit manager: ReferenceManager): this.type = this.mul_(e2)
+  def -(e2: Scalar)(implicit manager: ReferenceManager): Tensor = this.sub(e2, 1)
+  def -=(e2: Scalar)(implicit manager: ReferenceManager): this.type = this.sub_(e2, 1)
+  def /(e2: Scalar)(implicit manager: ReferenceManager): Tensor = this.div(e2)
+  def /=(e2: Scalar)(implicit manager: ReferenceManager): this.type = this.div_(e2)
+
+  override def equals(other: Any): Boolean = other match {
+    case x: Tensor => underlying.equal(x.underlying)
+    case _         => false
+  }
+
+  override def hashCode = ???
+
+  override def toString: String = underlying.toString
+
+  override protected def delete(): Unit = {
+    underlying.delete()
+  }
+
+  /** Zero out the gradient. Should only be used on [[Tensor]]s that represents parameters in a [[Model]]. */
+  private[torch] def zeroGradient_(): this.type = NoGrad.noGrad {
+    Tensor.ensureGradDefined(underlying)
+    underlying.grad.zero_()
+    this
+  }
+
+  /** Add the gradient from `from` in place.
+    * Should only be used on [[Tensor]]s that represents parameters in a [[Model]].
+    */
+  private[torch] def accumulateGradient_(from: Tensor): this.type = NoGrad.noGrad {
+    Tensor.ensureGradDefined(this.underlying)
+    Tensor.ensureGradDefined(from.underlying)
+    val alpha = new internal.Scalar(1)
+    try {
+      underlying.grad.add_(from.underlying.grad, alpha)
+      this
+    } finally {
+      alpha.delete()
+    }
+
+  }
+
+  /** Add (the values of) `from` in place.
+    * Should only be used on [[Tensor]]s that represents parameters in a [[Model]].
+    */
+  private[torch] def accumulate_(from: Tensor): this.type = NoGrad.noGrad {
+    val alpha = new internal.Scalar(1)
+    try {
+      underlying.add_(from.underlying, alpha)
+      this
+    } finally {
+      alpha.delete()
+    }
+    this
+  }
+
+  private[torch] def binOp[Underlying2](
+      other: TorchReference[Underlying2],
+  )(
+      f: (internal.TorchTensor, Underlying2) => internal.TorchTensor,
+  )(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    TorchReference.assertOpen(this, other)(Tensor(f(this.underlying, other.underlying)))
+  }
+
+  private[torch] def unOp(
+      f: (internal.TorchTensor) => internal.TorchTensor,
+  )(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    TorchReference.assertOpen(this)(Tensor(f(underlying)))
+  }
+
+  private[torch] def ternOp[Underlying2, Underlying3](
+      b: TorchReference[Underlying2],
+      c: TorchReference[Underlying3],
+  )(
+      f: (internal.TorchTensor, Underlying2, Underlying3) => internal.TorchTensor,
+  )(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    TorchReference.assertOpen(this, b, c)(Tensor(f(this.underlying, b.underlying, c.underlying)))
+  }
+}
+
+object Tensor {
+
+  private[torch] def apply(internal: TorchTensor)(implicit manager: ReferenceManager): Tensor = {
+    manager.addReference(new Tensor(internal))
+  }
+
+  private[torch] def apply()(implicit manager: ReferenceManager): Tensor = {
+    manager.addReference(new Tensor(new internal.TorchTensor()))
+  }
+
+  /** Torch tries to lazily initialize the gradient vector. The way we do things doesn't
+    * seem to hit all the right initialization paths, so we explicitly force the gradient
+    * to zero in some places.
+    */
+  private[torch] def ensureGradDefined(underlying: TorchTensor): Unit = {
+    if (!underlying.grad.defined()) {
+      TensorOptions(requires_grad = Some(true)).toInternal.apply { opts =>
+        val empty = swig.empty(underlying.sizes(), opts, None)
+        try {
+          underlying.grad.operator_equals(empty)
+        } finally {
+          empty.delete()
+        }
+      }
+    }
+  }
+
+  /** note that empty does *not* initialize the memory */
+  def empty(
+      dim: Size,
+      options: TensorOptions = TensorOptions(),
+  )(implicit manager: ReferenceManager): Tensor = {
+    options.toInternal.apply { opts => Tensor(swig.empty(dim.sizes, opts, None)) }
+  }
+
+  def zeros(
+      dim: Size,
+      options: TensorOptions = TensorOptions(),
+  )(implicit manager: ReferenceManager): Tensor = {
+    options.toInternal.apply { opts => Tensor(swig.zeros(dim.sizes, opts)) }
+  }
+
+  def ones(
+      dim: Size,
+      options: TensorOptions = TensorOptions(),
+  )(implicit manager: ReferenceManager): Tensor = {
+    options.toInternal.apply { opts => Tensor(swig.ones(dim.sizes, opts)) }
+  }
+
+  def full(dim: Size, scalar: Scalar, options: TensorOptions = TensorOptions())(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    options.toInternal.apply { opts => Tensor(swig.full(dim.sizes, scalar.underlyingChecked, opts)) }
+  }
+
+  def sparseCooTensor(indices: Tensor, values: Tensor, shape: Size, options: TensorOptions = TensorOptions())(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+     options.toInternal.apply { opts => Tensor(swig.sparse_coo_tensor(indices.underlyingChecked, values.underlyingChecked, shape.sizes, opts)) }
+  }
+
+  def randomNormal(dim: Size, mean: Float = 0.0f, std: Float = 1.0f, options: TensorOptions = TensorOptions())(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    init.normal_(empty(dim, options), mean, std)
+  }
+
+  def randomNormalLike(t: Tensor, mean: Float = 0.0f, std: Float = 1.0f, options: TensorOptions = TensorOptions())(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    init.normal_(empty(t.shape, options), mean, std)
+  }
+
+  def randomUniform(
+      shape: Size,
+      low: Float = 0.0f,
+      high: Float = 1.0f,
+      options: TensorOptions = TensorOptions(),
+  )(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    init.uniform_(empty(shape, options), low, high)
+  }
+
+  def randomBernoulli(shape: Size, p: Float, options: TensorOptions = TensorOptions())(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    full(shape, 1.0f, options).bernoulli(p, None)
+  }
+
+  // TODO: different scalar types
+  // All methods below implicitly have requiresGrad = false.
+
+  /** @param data row-major
+    */
+  def fromFloatArray(data: Array[Float], shape: Size, options: TensorOptions = TensorOptions())(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    require(shape.numel() == data.length, s"Shape ${shape} (numel = ${shape.numel()}) requested but ${data.length} elements provided")
+    options.toInternal.apply { opts => Tensor(swig.from_float_array(data, shape.sizes, opts)) }
+  }
+
+  def fromLongArray(data: Array[Long], shape: Size, options: TensorOptions = TensorOptions())(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    require(shape.numel() == data.length, s"Shape ${shape} (numel = ${shape.numel()}) requested but ${data.length} elements provided")
+    options.toInternal.apply { opts => Tensor(swig.from_long_array(data, shape.sizes, opts)) }
+  }
+
+  def fromIntArray(data: Array[Int], shape: Size, options: TensorOptions = TensorOptions())(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    require(shape.numel() == data.length, s"Shape ${shape} (numel = ${shape.numel()}) requested but ${data.length} elements provided")
+    options.toInternal.apply { opts => Tensor(swig.from_int_array(data, shape.sizes, opts)) }
+  }
+
+  def fromByteArray(data: Array[Byte], shape: Size, options: TensorOptions = TensorOptions())(
+      implicit manager: ReferenceManager,
+  ): Tensor = {
+    require(shape.numel() == data.length, s"Shape ${shape} (numel = ${shape.numel()}) requested but ${data.length} elements provided")
+    options.toInternal.apply { opts => Tensor(swig.from_byte_array(data, shape.sizes, opts)) }
+  }
+
+  def fromDoubleArray(data: Array[Double], shape: Size, options: TensorOptions = TensorOptions())(
+        implicit manager: ReferenceManager,
+  ): Tensor = {
+    require(shape.numel() == data.length, s"Shape ${shape} (numel = ${shape.numel()}) requested but ${data.length} elements provided")
+    options.toInternal.apply { opts => Tensor(swig.from_double_array(data, shape.sizes, opts)) }
+  }
+
+  def apply(values: Float*)(implicit manager: ReferenceManager): Tensor = {
+    fromFloatArray(values.toArray, Size(values.length))
+  }
+
+  def fromLongs(values: Long*)(implicit manager: ReferenceManager): Tensor = {
+    fromLongArray(values.toArray, Size(values.length))
+  }
+
+  implicit class OpsForScalarable[T](f: T)(implicit toScalar: T => Scalar) {
+    def +(other: Tensor)(implicit manager: ReferenceManager): Tensor = other + f
+    def *(other: Tensor)(implicit manager: ReferenceManager): Tensor = other * f
+    // TODO: +, *
+  }
+
+  def load(f: File, device: Option[Device] = None)(implicit rm: ReferenceManager): Tensor = {
+    val v = Tensor(new TorchTensor())
+    swig.load(v.underlying, f.toString, device.map(_.underlying))
+    v
+  }
+
+  def loadArray(f: File, device: Option[Device] = None)(implicit rm: ReferenceManager): Array[Tensor] = {
+    val v = new TensorVector()
+    try {
+      swig.load(v, f.toString, device.map(_.underlying))
+      v.asScala.map(t => Tensor(t)).toArray
+    } finally {
+      v.delete()
+    }
+  }
+
+}
