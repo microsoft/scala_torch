@@ -12,7 +12,7 @@ import com.microsoft.scalatorch.torch.internal.{ torch_swig, QualifiedName, Type
 import com.microsoft.scalatorch.torch.util.Disposer
 import resource.ManagedResource
 import com.microsoft.scalatorch.torch._
-import com.microsoft.scalatorch.torch.init.ParameterInit
+import com.microsoft.scalatorch.torch.nn.init.ParameterInit
 import com.microsoft.scalatorch.torch.util.Disposer
 import com.microsoft.scalatorch.torch.syntax._
 
@@ -64,7 +64,7 @@ class Module private[torch] (
   def addParameter(
       shape: Size,
       name: String,
-      init: ParameterInit =  com.microsoft.scalatorch.torch.init.glorotUniform(false),
+      init: ParameterInit =  com.microsoft.scalatorch.torch.nn.init.glorotUniform(false),
       device: Option[Device] = None,
       dtype: Option[dtype] = None,
   )(

@@ -13,7 +13,13 @@ Code generation is accomplished through a combination of [Swig](https://www.swig
 [Python script](swig/src/main/swig/bindgen.py) that reads in `Declarations.yaml`, which provides a language-independent 
 API for a large part of LibTorch. This file is [deprecated](https://github.com/pytorch/pytorch/issues/69471) and in the 
 future, we can hopefully replace `bindgen.py` using the forthcoming [torchgen](https://github.com/pytorch/pytorch/issues/69471#issuecomment-1273642655)
-tool provided by PyTorch.
+tool provided by PyTorch. 
+
+One major annoyance with Scala in particular is that you cannot define multiple overloads of a method that take default
+arguments. Currently, `bindgen.py` uses any defaults present in only the first overload found in `Declarations.yaml`.
+In some cases, clever use of Scala's implicit conversions can hide these headaches, but currently, you occasionaly have to write
+out the defaults where you would not have to in Python. One potential future option is to give overloads
+different names, but we elected not to do that (yet).
 
 We have not yet published JARs for this project. These are coming soon. 
 
